@@ -27,18 +27,27 @@ function calcx(E, m, n, k)
 
     # subtract spdiagm( diag(tmp) ) from tmp in-place by setting diagonals to 0
     # hoist field access (shouldn't be necessary on julia >= 0.5)
-    #tmp_colptr = tmp.colptr
-    #tmp_rowval = tmp.rowval
-    #tmp_nzval  = tmp.nzval
-    #@inbounds for col in 1:size(tmp, 2)
-    #    for k in tmp_colptr[col] : tmp_colptr[col+1]-1
-    #        if tmp_rowval[k] == col
-    #            tmp_nzval[k] = 0
-    #        end
-    #    end
-    #end
+    tmp_colptr = tmp.colptr
+    tmp_rowval = tmp.rowval
+    tmp_nzval  = tmp.nzval
+    @inbounds for col in 1:size(tmp, 2)
+        k1 = tmp_colptr[col]
+        k2 = tmp_colptr[col+1]-1
+        (k1 > k2) && continue # empty column
+        k1 = searchsortedfirst(tmp_rowval, col, k1, k2, Base.Order.Forward)
+        if k1 <= k2 && tmp_rowval[k1] == col
+            tmp_nzval[k1] = 0
+        end
+        #for k in tmp_colptr[col] : tmp_colptr[col+1]-1
+        #    if tmp_rowval[k] == col
+        #        tmp_nzval[k] = 0
+        #    elseif tmp_rowval[k] > col
+        #        break
+        #    end
+        #end
+    end
 
-    #R = E * tmp
+    R = E * tmp
     # set elements where E[i,j]==2 to 1, and otherwise to 0 in-place
     # hoist field access (shouldn't be necessary on julia >= 0.5)
     #R_colptr = R.colptr
@@ -55,7 +64,7 @@ function calcx(E, m, n, k)
     #end
     #s = sum(R, 2)
 
-    R = E * ( tmp - spdiagm( diag(tmp) ) )
+    #R = E * ( tmp - spdiagm( diag(tmp) ) )
     r,c,v = findnz(R)
     id = v.==2
     A = sparse( r[id], c[id], 1, m, n)
