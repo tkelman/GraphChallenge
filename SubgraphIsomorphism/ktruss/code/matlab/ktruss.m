@@ -18,14 +18,10 @@ R = E* (tmp-diag(diag(tmp)));
 
 s = sum(double(R==2),2);
 xc = s >= k-2;
-[m,n] = size(E);
+
 % While edges exist violating k-Truss, delete those edges and take a subgraph.
 while nnz(xc) ~= nnz(any(E,2)) 
-    Etrans = E.';
-    Ekeep = Etrans(:, xc);
-    [i,j,v] = find(Ekeep);
-    E = sparse(find(xc)(j), i, v, m, n);
-    %E(not(xc),:) = 0;
+    E(not(xc),:) = 0;    
     tmp = E.'*E;
     R = E* (tmp-diag(diag(tmp)));
     s = sum(double(R==2),2);
