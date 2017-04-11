@@ -27,34 +27,41 @@ function calcx(E, m, n, k)
 
     # subtract spdiagm( diag(tmp) ) from tmp in-place by setting diagonals to 0
     # hoist field access (shouldn't be necessary on julia >= 0.5)
-    tmp_colptr = tmp.colptr
-    tmp_rowval = tmp.rowval
-    tmp_nzval  = tmp.nzval
-    @inbounds for col in 1:size(tmp, 2)
-        for k in tmp_colptr[col] : tmp_colptr[col+1]-1
-            if tmp_rowval[k] == col
-                tmp_nzval[k] = 0
-            end
-        end
-    end
+    #tmp_colptr = tmp.colptr
+    #tmp_rowval = tmp.rowval
+    #tmp_nzval  = tmp.nzval
+    #@inbounds for col in 1:size(tmp, 2)
+    #    for k in tmp_colptr[col] : tmp_colptr[col+1]-1
+    #        if tmp_rowval[k] == col
+    #            tmp_nzval[k] = 0
+    #        end
+    #    end
+    #end
 
-    R = E * tmp
+    #R = E * tmp
     # set elements where E[i,j]==2 to 1, and otherwise to 0 in-place
     # hoist field access (shouldn't be necessary on julia >= 0.5)
-    R_colptr = R.colptr
-    R_rowval = R.rowval
-    R_nzval  = R.nzval
-    @inbounds for col in 1:size(R, 2)
-        for k in R_colptr[col] : R_colptr[col+1]-1
-            if R_nzval[k] == 2
-                R_nzval[k] = 1
-            else
-                R_nzval[k] = 0
-            end
-        end
-    end
-    s = sum(R, 2)
+    #R_colptr = R.colptr
+    #R_rowval = R.rowval
+    #R_nzval  = R.nzval
+    #@inbounds for col in 1:size(R, 2)
+    #    for k in R_colptr[col] : R_colptr[col+1]-1
+    #        if R_nzval[k] == 2
+    #            R_nzval[k] = 1
+    #        else
+    #            R_nzval[k] = 0
+    #        end
+    #    end
+    #end
+    #s = sum(R, 2)
+
+    R = E * ( tmp - spdiagm( diag(tmp) ) )
+    r,c,v = findnz(R)
+    id = v.==2
+    A = sparse( r[id], c[id], 1, m, n)
+    s = sum(A, 2)
     x = s .< (k-2)
+
     return (x, !x)
 end
 
@@ -82,15 +89,15 @@ function ktruss(inc_mtx_file, k)
     x, xc = calcx(E, m, n, k)
     while sum(xc) != sum( any(E,2) )
         # set elements of E in rows where x is true to 0, E[find(x), :] = 0
-        xrows = find(x)
-        @inbounds for col in 1:size(E, 2)
-            for k in E_colptr[col] : E_colptr[col+1]-1
-                if E_rowval[k] in xrows
-                    E_nzval[k] = 0
-                end
-            end
-        end
-
+        #xrows = find(x)
+        #@inbounds for col in 1:size(E, 2)
+        #    for k in E_colptr[col] : E_colptr[col+1]-1
+        #        if E_rowval[k] in xrows
+        #            E_nzval[k] = 0
+        #        end
+        #    end
+        #end
+        E[find(x), :] = 0
         x, xc = calcx(E, m, n, k)
     end
     
