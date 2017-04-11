@@ -30,13 +30,32 @@ function calcx(E, m, n, k)
     tmp_colptr = tmp.colptr
     tmp_rowval = tmp.rowval
     tmp_nzval  = tmp.nzval
+    num_deleted_diags = 0
     @inbounds for col in 1:size(tmp, 2)
-        k1 = tmp_colptr[col]
-        k2 = tmp_colptr[col+1]-1
+        k1 = tmp_colptr[col] + num_deleted_diags
+        k2 = tmp_colptr[col+1] - 1
         (k1 > k2) && continue # empty column
-        k1 = searchsortedfirst(tmp_rowval, col, k1, k2, Base.Order.Forward)
-        if k1 <= k2 && tmp_rowval[k1] == col
-            tmp_nzval[k1] = 0
+        kd = searchsortedfirst(tmp_rowval, col, k1, k2, Base.Order.Forward)
+        if kd <= k2 && tmp_rowval[kd] == col
+            # shift start of column
+            for k in k1 : kd-1
+                tmp_rowval[k-num_deleted_diags] = tmp_rowval[k]
+                tmp_nzval[k-num_deleted_diags] = tmp_nzval[k]
+            end
+            num_deleted_diags += 1
+            # shift rest of column, overwriting old diagonal
+            for k in kd+1 : k2
+                tmp_rowval[k-num_deleted_diags] = tmp_rowval[k]
+                tmp_nzval[k-num_deleted_diags] = tmp_nzval[k]
+            end
+            tmp_colptr[col+1] -= num_deleted_diags
+        elseif num_deleted_diags > 0
+            # shift whole column by same amount
+            for k in k1 : k2
+                tmp_rowval[k-num_deleted_diags] = tmp_rowval[k]
+                tmp_nzval[k-num_deleted_diags] = tmp_nzval[k]
+            end
+            tmp_colptr[col+1] -= num_deleted_diags
         end
         #for k in tmp_colptr[col] : tmp_colptr[col+1]-1
         #    if tmp_rowval[k] == col
@@ -46,6 +65,8 @@ function calcx(E, m, n, k)
         #    end
         #end
     end
+    resize!(tmp_rowval, length(tmp_rowval) - num_deleted_diags)
+    resize!(tmp_nzval, length(tmp_nzval) - num_deleted_diags)
 
     R = E * tmp
     # set elements where E[i,j]==2 to 1, and otherwise to 0 in-place
