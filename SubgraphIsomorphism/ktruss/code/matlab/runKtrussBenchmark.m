@@ -1,5 +1,5 @@
 
-inc_mtx_file = '../../../data/ktruss_example.tsv';
+inc_mtx_file = '../../../data/amazon0302_inc.tsv';
 
 E_expected =  [1  1  0  0  0; ...
                0  1  1  0  0; ...
@@ -11,11 +11,14 @@ E_expected =  [1  1  0  0  0; ...
 
 E = ktruss(inc_mtx_file, 3);
 
-if nnz( full(E) - E_expected )
-    fprintf(2, 'Unable to verify results\n');
-else
-    disp(E);
-end
+[rowinds, colinds, nzvals] = find(E);
+dlmwrite('amazon0302_result.tsv', [rowinds colinds nzvals], '\t');
+
+%if nnz( full(E) - E_expected )
+%    fprintf(2, 'Unable to verify results\n');
+%else
+%    disp(E);
+%end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Graph Challenge benchmark
