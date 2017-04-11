@@ -50,25 +50,30 @@ function calcx(E, m, n, k)
     R = E * tmp
     # set elements where E[i,j]==2 to 1, and otherwise to 0 in-place
     # hoist field access (shouldn't be necessary on julia >= 0.5)
-    #R_colptr = R.colptr
-    #R_rowval = R.rowval
-    #R_nzval  = R.nzval
-    #@inbounds for col in 1:size(R, 2)
-    #    for k in R_colptr[col] : R_colptr[col+1]-1
-    #        if R_nzval[k] == 2
-    #            R_nzval[k] = 1
-    #        else
-    #            R_nzval[k] = 0
-    #        end
-    #    end
-    #end
-    #s = sum(R, 2)
+    R_colptr = R.colptr
+    R_rowval = R.rowval
+    R_nzval  = R.nzval
+    num_deleted = 0
+    @inbounds for col in 1:size(R, 2)
+        for k in R_colptr[col] + num_deleted : R_colptr[col+1]-1
+            if R_nzval[k] == 2
+                R_rowval[k - num_deleted] = R_rowval[k]
+                R_nzval[k - num_deleted] = 1
+            else
+                num_deleted += 1
+            end
+        end
+        R_colptr[col+1] -= num_deleted
+    end
+    resize!(R_rowval, length(R_rowval) - num_deleted)
+    resize!(R_nzval, length(R_nzval) - num_deleted)
+    s = sum(R, 2)
 
     #R = E * ( tmp - spdiagm( diag(tmp) ) )
-    r,c,v = findnz(R)
-    id = v.==2
-    A = sparse( r[id], c[id], 1, m, n)
-    s = sum(A, 2)
+    #r,c,v = findnz(R)
+    #id = v.==2
+    #A = sparse( r[id], c[id], 1, m, n)
+    #s = sum(A, 2)
     x = s .< (k-2)
 
     return (x, !x)
