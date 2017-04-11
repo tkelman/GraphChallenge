@@ -25,26 +25,23 @@ end
 function calcx(E, m, n, k)
     tmp = E.'*E
 
-    # subtract spdiagm( diag(tmp) ) from tmp in-place by setting diagonals to 0
+    # subtract spdiagm( diag(tmp) ) from tmp in-place by removing any nonzero diagonals
     # hoist field access (shouldn't be necessary on julia >= 0.5)
     tmp_colptr = tmp.colptr
     tmp_rowval = tmp.rowval
     tmp_nzval  = tmp.nzval
+    num_deleted_diags = 0
     @inbounds for col in 1:size(tmp, 2)
         k1 = tmp_colptr[col]
-        k2 = tmp_colptr[col+1]-1
+        k2 = tmp_colptr[col+1] - 1 - num_deleted_diags
         (k1 > k2) && continue # empty column
         k1 = searchsortedfirst(tmp_rowval, col, k1, k2, Base.Order.Forward)
         if k1 <= k2 && tmp_rowval[k1] == col
-            tmp_nzval[k1] = 0
+            deleteat!(tmp_rowval, k1)
+            deleteat!(tmp_nzval, k1)
+            num_deleted_diags += 1
         end
-        #for k in tmp_colptr[col] : tmp_colptr[col+1]-1
-        #    if tmp_rowval[k] == col
-        #        tmp_nzval[k] = 0
-        #    elseif tmp_rowval[k] > col
-        #        break
-        #    end
-        #end
+        tmp_colptr[col+1] -= num_deleted_diags
     end
 
     R = E * tmp
