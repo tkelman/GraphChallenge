@@ -1,45 +1,25 @@
-"""
-read a sparse matrix from a r,c,v delimited file `f`
-must be in CSC sorted order
-"""
-function readdlm_sparsemat(f, delim, eltyp)
-    colptr = Vector{eltyp}(1)
-    rowval = Vector{eltyp}(0)
-    nzval = Vector{eltyp}(0)
-    maxrow = 0
-    lastrow = 0
-    lastcol = 0
-    colptr[1] = 1
+function simpler_readdlm(f, delim, eltyp)
+    results = []
+    linelength::Int = 0
     open(f) do handle
         for line in eachline(handle)
-            rcv = split(line, delim)
-            #if length(rcv) != 3
-            #    error("unexpected line length $rcv at line $line")
-            #end
-            newrow = parse(eltyp, rcv[1])
-            newcol = parse(eltyp, rcv[2])
-            val = parse(eltyp, rcv[3])
-            #if newcol < lastcol
-            #    error("column indices should not decrease! lastcol was $lastcol, at line $line")
-            #else
-            if newcol == lastcol
-                #if newrow <= lastrow
-                #    error("row indices should strictly increase! lastrow was $lastrow, at line $line")
-                #end
-                colptr[newcol+1] += 1
-            else
-                resize!(colptr, newcol+1)
-                colptr[lastcol+2:newcol] = colptr[lastcol+1] # potentially empty columns
-                colptr[newcol+1] = colptr[lastcol+1] + 1
+            curline = Vector{eltyp}(0)
+            for elem in split(line, delim)
+                push!(curline, parse(eltyp, elem))
             end
-            maxrow = max(maxrow, newrow)
-            push!(rowval, newrow)
-            push!(nzval, val)
-            lastrow = newrow
-            lastcol = newcol
+            if linelength == 0
+                linelength = length(curline)
+            elseif linelength != length(curline)
+                error("unexpected line length $linelength")
+            end
+            push!(results, curline)
         end
     end
-    return SparseMatrixCSC(maxrow, length(colptr)-1, colptr, rowval, nzval)
+    output = Matrix{eltyp}(length(results), linelength)
+    @inbounds for j = 1:linelength, i = 1:length(results)
+        output[i,j] = results[i][j]
+    end
+    return output
 end
 
 function calcx(E, m, n, k)
@@ -92,11 +72,11 @@ function ktruss(inc_mtx_file, k)
     end
 
     # load input data       
-    t_read_inc=@elapsed E = readdlm_sparsemat( inc_mtx_file, '\t', Int64)
+    t_read_inc=@elapsed ii = readdlm( inc_mtx_file, '\t', Int64)
     println("incidence matrix read time : ", t_read_inc)
 
-    #t_create_inc=@elapsed E = sparse( ii[:,1], ii[:,2], ii[:,3] )
-    #println("sparse adj. matrix creation time : ", t_create_inc)
+    t_create_inc=@elapsed E = sparse( ii[:,1], ii[:,2], ii[:,3] )
+    println("sparse adj. matrix creation time : ", t_create_inc)
 
     # hoist field access (shouldn't be necessary on julia >= 0.5)
     E_colptr = E.colptr
