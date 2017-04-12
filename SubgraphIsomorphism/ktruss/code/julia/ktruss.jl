@@ -42,7 +42,7 @@ function calcx(E, m, n, k)
         end
     end
 
-    return s .< (k-2), sum(rowflags)
+    return find(s .>= (k-2)), sum(rowflags)
 end
 
 function ktruss(inc_mtx_file, k)
@@ -55,32 +55,32 @@ function ktruss(inc_mtx_file, k)
     t_read_inc=@elapsed ii = readdlm( inc_mtx_file, '\t', Int64)
     println("incidence matrix read time : ", t_read_inc)
 
-    t_create_inc=@elapsed E = Chol.Sparse(sparse( ii[:,1], ii[:,2], ii[:,3] ))
+    t_create_inc=@elapsed E = sparse( ii[:,1], ii[:,2], ii[:,3] )
     println("sparse adj. matrix creation time : ", t_create_inc)
 
     tic()
     m,n = size(E)
-    E_ptr = unsafe_load(E.p)
-    x, rowcount = calcx(E, m, n, k)
-    while sum(!, x) != rowcount
+    xcinds, rowcount = calcx(E, m, n, k)
+    while length(xcinds) != rowcount
         # set elements of E in rows where x is true to 0, E[find(x), :] = 0
-        #Ekeep = E[xcinds, :]
-        #E = SparseMatrixCSC(m, n, Ekeep.colptr, xcinds[Ekeep.rowval], Ekeep.nzval)
-        num_deleted = 0
-        @inbounds for col in 1:n
-            for j in colptr0(E, col) + 1 + num_deleted : colptr0(E, col+1)
-                rowj = rowval(E, j)
-                if x[rowj]
-                    num_deleted += 1
-                elseif num_deleted > 0
-                    unsafe_store!(E_ptr.i, rowj, j - num_deleted)
-                    unsafe_store!(E_ptr.x, nzval(E, j), j - num_deleted)
-                end
-            end
-            unsafe_store!(E_ptr.p, col+1, colptr0(E, col+1) - num_deleted)
-        end
+        Ekeep = E[xcinds, :]
+        E = SparseMatrixCSC(m, n, Ekeep.colptr, xcinds[Ekeep.rowval], Ekeep.nzval)
+        #num_deleted = 0
+        #@inbounds for col in 1:size(E, 2)
+        #    for k in E_colptr[col] + num_deleted : E_colptr[col+1]-1
+        #        if x[E_rowval[k]]
+        #            num_deleted += 1
+        #        elseif num_deleted > 0
+        #            E_rowval[k - num_deleted] = E_rowval[k]
+        #            E_nzval[k - num_deleted] = E_nzval[k]
+        #        end
+        #    end
+        #    E_colptr[col+1] -= num_deleted
+        #end
+        #resize!(E_rowval, length(E_rowval) - num_deleted)
+        #resize!(E_nzval, length(E_nzval) - num_deleted)
         #E[find(x), :] = 0
-        x, rowcount = calcx(E, m, n, k)
+        xcinds, rowcount = calcx(E, m, n, k)
     end
     
     return E
