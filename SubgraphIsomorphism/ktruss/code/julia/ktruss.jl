@@ -8,7 +8,8 @@ colptr0(A::Chol.Sparse, col) = unsafe_load(unsafe_load(A.p).p, col)
 rowval(A::Chol.Sparse, j) = unsafe_load(unsafe_load(A.p).i, j) + 1
 nzval(A::Chol.Sparse, j) = unsafe_load(unsafe_load(A.p).x, j)
 
-function calcx(E, m, n, k)
+# returns find(!x), using preallocated storage for s
+function calcx!(E, m, n, k, s)
     CSE = Chol.Sparse(E)
     tmp = CSE'*CSE
 
@@ -23,7 +24,7 @@ function calcx(E, m, n, k)
     end
 
     R = CSE * tmp
-    s = zeros(Int, m)
+    fill!(s, 0)
 
     @inbounds for col in 1:n
         for j in colptr0(R, col) + 1 : colptr0(R, col+1)
@@ -32,8 +33,7 @@ function calcx(E, m, n, k)
             end
         end
     end
-    x = s .< (k-2)
-    return (x, !x)
+    return find(s .>= (k-2))
 end
 
 function ktruss(inc_mtx_file, k)
@@ -49,22 +49,16 @@ function ktruss(inc_mtx_file, k)
     t_create_inc=@elapsed E = sparse( ii[:,1], ii[:,2], ii[:,3] )
     println("sparse adj. matrix creation time : ", t_create_inc)
 
-    # hoist field access (shouldn't be necessary on julia >= 0.5)
-    #E_colptr = E.colptr
-    #E_rowval = E.rowval
-    #E_nzval  = E.nzval
-
-    #
     tic()
     m,n = size(E)
-    x, xc = calcx(E, m, n, k)
-    while sum(xc) != sum( any(E,2) )
+    s = zeros(Int, m)
+    xcinds = calcx!(E, m, n, k, s)
+    while length(xcinds) != sum( any(E,2) )
         # set elements of E in rows where x is true to 0, E[find(x), :] = 0
-        xcrows = find(xc)
-        Ekeep = E[xcrows, :]
-        E = SparseMatrixCSC(m, n, Ekeep.colptr, xcrows[Ekeep.rowval], Ekeep.nzval)
+        Ekeep = E[xcinds, :]
+        E = SparseMatrixCSC(m, n, Ekeep.colptr, xcinds[Ekeep.rowval], Ekeep.nzval)
         #num_deleted = 0
-        #@inbounds for col in 1:size(E, 2)
+        #@inbounds for col in 1:n
         #    for k in E_colptr[col] + num_deleted : E_colptr[col+1]-1
         #        if x[E_rowval[k]]
         #            num_deleted += 1
@@ -78,7 +72,7 @@ function ktruss(inc_mtx_file, k)
         #resize!(E_rowval, length(E_rowval) - num_deleted)
         #resize!(E_nzval, length(E_nzval) - num_deleted)
         #E[find(x), :] = 0
-        x, xc = calcx(E, m, n, k)
+        xcinds = calcx!(E, m, n, k, s)
     end
     
     return E
