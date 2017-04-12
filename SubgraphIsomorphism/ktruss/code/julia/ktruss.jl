@@ -32,8 +32,7 @@ function calcx(E, m, n, k)
             end
         end
     end
-    x = s .< (k-2)
-    return (x, !x)
+    return find(s .>= (k-2))
 end
 
 function ktruss(inc_mtx_file, k)
@@ -57,12 +56,11 @@ function ktruss(inc_mtx_file, k)
     #
     tic()
     m,n = size(E)
-    x, xc = calcx(E, m, n, k)
-    while sum(xc) != sum( any(E,2) )
+    xcinds = calcx(E, m, n, k)
+    while length(xcinds) != sum( any(E,2) )
         # set elements of E in rows where x is true to 0, E[find(x), :] = 0
-        xcrows = find(xc)
-        Ekeep = E[xcrows, :]
-        E = SparseMatrixCSC(m, n, Ekeep.colptr, xcrows[Ekeep.rowval], Ekeep.nzval)
+        Ekeep = E[xcinds, :]
+        E = SparseMatrixCSC(m, n, Ekeep.colptr, xcinds[Ekeep.rowval], Ekeep.nzval)
         #num_deleted = 0
         #@inbounds for col in 1:size(E, 2)
         #    for k in E_colptr[col] + num_deleted : E_colptr[col+1]-1
@@ -78,7 +76,7 @@ function ktruss(inc_mtx_file, k)
         #resize!(E_rowval, length(E_rowval) - num_deleted)
         #resize!(E_nzval, length(E_nzval) - num_deleted)
         #E[find(x), :] = 0
-        x, xc = calcx(E, m, n, k)
+        xcinds = calcx(E, m, n, k)
     end
     
     return E
