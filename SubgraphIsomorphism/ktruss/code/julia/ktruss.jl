@@ -22,22 +22,55 @@ function simpler_readdlm(f, delim, eltyp)
     return output
 end
 
+#if isdefined(Base, :SparseMatrix)
+#    CholSparse = SparseMatrix.CHOLMOD.Sparse
+#else
+#    CholSparse = SparseArrays.CHOLMOD.Sparse
+#end
+
+"compute strictly lower triangular part of E.'*E"
+function lowertri_selfproduct(E)
+    m, n = size(E)
+    columns = [E[:,j] for j in 1:n]
+    colptr = Vector{Int64}(n+1)
+    colptr[1] = 1
+    rowval = Vector{Int64}(0)
+    nzval = Vector{Int64}(0)
+    @inbounds for col in 1:n
+        colcount = 0
+        for row in col+1:n
+            val = columns[col].'*columns[row]
+            if val[1] != 0
+                colcount += 1
+                push!(rowval, row)
+                push!(nzval, val[1])
+            end
+        end
+        colptr[col+1] = colptr[col] + colcount
+    end
+    colptr[end] = colptr[end-1]
+    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
+end
+
 function calcx(E, m, n, k)
-    tmp = E.'*E
+    #CSE = CholSparse(E)
+    #tmp = sparse(CSE'*CSE)
+    #tmp = E.'*E
+    tmp = lowertri_selfproduct(E)
 
     # subtract spdiagm( diag(tmp) ) from tmp in-place by setting diagonals to 0
     # hoist field access (shouldn't be necessary on julia >= 0.5)
-    tmp_colptr = tmp.colptr
-    tmp_rowval = tmp.rowval
-    tmp_nzval  = tmp.nzval
-    @inbounds for col in 1:size(tmp, 2)
-        k1 = tmp_colptr[col]
-        k2 = tmp_colptr[col+1]-1
-        (k1 > k2) && continue # empty column
-        k1 = searchsortedfirst(tmp_rowval, col, k1, k2, Base.Order.Forward)
-        if k1 <= k2 && tmp_rowval[k1] == col
-            tmp_nzval[k1] = 0
-        end
+    #tmp_colptr = tmp.colptr
+    #tmp_rowval = tmp.rowval
+    #tmp_nzval  = tmp.nzval
+    #@inbounds for col in 1:size(tmp, 2)
+    #    k1 = tmp_colptr[col]
+    #    k2 = tmp_colptr[col+1]-1
+    #    (k1 > k2) && continue # empty column
+    #    k1 = searchsortedfirst(tmp_rowval, col, k1, k2, Base.Order.Forward)
+    #    if k1 <= k2 && tmp_rowval[k1] == col
+    #        tmp_nzval[k1] = 0
+    #    end
         #for k in tmp_colptr[col] : tmp_colptr[col+1]-1
         #    if tmp_rowval[k] == col
         #        tmp_nzval[k] = 0
@@ -45,7 +78,7 @@ function calcx(E, m, n, k)
         #        break
         #    end
         #end
-    end
+    #end
 
     R = E * tmp
     # set elements where E[i,j]==2 to 1, and otherwise to 0 in-place
