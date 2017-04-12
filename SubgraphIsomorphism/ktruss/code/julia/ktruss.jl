@@ -1,21 +1,21 @@
-const CholSparse = if isdefined(Base, :SparseMatrix)
-    getfield(Base, :SparseMatrix).CHOLMOD.Sparse
+const Chol = if isdefined(Base, :SparseArrays)
+    Base.SparseArrays.CHOLMOD
 else
-    getfield(Base, :SparseArrays).CHOLMOD.Sparse
+    Base.SparseMatrix.CHOLMOD
 end
 
-colptr(A::CholSparse, col) = unsafe_load(unsafe_load(A.p).p, col) + 1
-rowval(A::CholSparse, j) = unsafe_load(unsafe_load(A.p).i, j) + 1
-nzval(A::CholSparse, j) = unsafe_load(unsafe_load(A.p).x, j)
+colptr0(A::Chol.Sparse, col) = unsafe_load(unsafe_load(A.p).p, col)
+rowval(A::Chol.Sparse, j) = unsafe_load(unsafe_load(A.p).i, j) + 1
+nzval(A::Chol.Sparse, j) = unsafe_load(unsafe_load(A.p).x, j)
 
 function calcx(E, m, n, k)
-    CSE = CholSparse(E)
+    CSE = Chol.Sparse(E)
     tmp = CSE'*CSE
 
     # subtract spdiagm( diag(tmp) ) from tmp in-place by setting diagonals to 0
     tmp_ptr = unsafe_load(tmp.p)
     for col in 1:n
-        for j in colptr(tmp, col) : colptr(tmp, col+1)-1
+        for j in colptr0(tmp, col) + 1 : colptr0(tmp, col+1)
             if rowval(tmp, j) == col
                 unsafe_store!(tmp_ptr.x, 0, j)
             end
@@ -26,7 +26,7 @@ function calcx(E, m, n, k)
     s = zeros(Int, m)
 
     @inbounds for col in 1:n
-        for j in colptr(R, col) : colptr(R, col+1)-1
+        for j in colptr0(R, col) + 1 : colptr0(R, col+1)
             if nzval(R, j) == 2
                 s[rowval(R, j)] += 1
             end
