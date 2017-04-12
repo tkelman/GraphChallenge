@@ -47,12 +47,11 @@ end
 
 function ktruss(inc_mtx_file, k)
     if !isfile( inc_mtx_file )
-        println("unable to open input file")
-        return (-1)
+        error("unable to open input file")
     end
 
     # load input data       
-    t_read_inc=@elapsed ii = readdlm( inc_mtx_file, '\t', Int64)
+    t_read_inc=@elapsed ii::Matrix{Int64} = readdlm( inc_mtx_file, '\t', Int64)
     println("incidence matrix read time : ", t_read_inc)
 
     t_create_inc=@elapsed E = sparse( ii[:,1], ii[:,2], ii[:,3] )
