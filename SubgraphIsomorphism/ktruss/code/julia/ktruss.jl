@@ -32,7 +32,17 @@ function calcx(E, m, n, k)
             end
         end
     end
-    return find(s .>= (k-2))
+
+    rowflags = falses(m)
+    @inbounds for col in 1:n
+        for j in colptr0(CSE, col) + 1 : colptr0(CSE, col+1)
+            if nzval(CSE, j) != 0
+                rowflags[rowval(CSE, j)] = true
+            end
+        end
+    end
+
+    return find(s .>= (k-2)), sum(rowflags)
 end
 
 function ktruss(inc_mtx_file, k)
@@ -48,16 +58,10 @@ function ktruss(inc_mtx_file, k)
     t_create_inc=@elapsed E = sparse( ii[:,1], ii[:,2], ii[:,3] )
     println("sparse adj. matrix creation time : ", t_create_inc)
 
-    # hoist field access (shouldn't be necessary on julia >= 0.5)
-    #E_colptr = E.colptr
-    #E_rowval = E.rowval
-    #E_nzval  = E.nzval
-
-    #
     tic()
     m,n = size(E)
-    xcinds = calcx(E, m, n, k)
-    while length(xcinds) != sum( any(E,2) )
+    xcinds, rowcount = calcx(E, m, n, k)
+    while length(xcinds) != rowcount
         # set elements of E in rows where x is true to 0, E[find(x), :] = 0
         Ekeep = E[xcinds, :]
         E = SparseMatrixCSC(m, n, Ekeep.colptr, xcinds[Ekeep.rowval], Ekeep.nzval)
@@ -76,7 +80,7 @@ function ktruss(inc_mtx_file, k)
         #resize!(E_rowval, length(E_rowval) - num_deleted)
         #resize!(E_nzval, length(E_nzval) - num_deleted)
         #E[find(x), :] = 0
-        xcinds = calcx(E, m, n, k)
+        xcinds, rowcount = calcx(E, m, n, k)
     end
     
     return E
